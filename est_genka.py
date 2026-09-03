@@ -21,6 +21,8 @@ from dnd_filepicker import pick_file
 # 設定
 # ---------------------------------------------------------------------------
 SHEET = "内訳書"
+SOUKATSU_SHEET = "総括書"
+SOUKATSU_KEYWORDS = ("法定福利費", "諸経費")
 
 DB_PATH = r"\\192.168.1.136\wwwroot\見積物件管理1.accdb"
 
@@ -67,6 +69,27 @@ def parse_quote(input_file, sheet):
     result.loc[condition, "flag"] = 8
 
     return result
+
+
+def read_soukatsu_amounts(input_file):
+    """総括書シートのA列(品名)に法定福利費/諸経費を含む行のK列(金額)を集計する。
+    総括書シートが無い見積書ではSUMIF数式のままで良いので空辞書を返す。"""
+    try:
+        df = pd.read_excel(input_file, sheet_name=SOUKATSU_SHEET, header=None)
+    except Exception:
+        return {}
+
+    amounts = {}
+    for _, row in df.iterrows():
+        name = row[0]
+        amount = row[10] if len(row) > 10 else None
+        if not isinstance(name, str) or not isinstance(amount, (int, float)):
+            continue
+        for keyword in SOUKATSU_KEYWORDS:
+            if keyword in name:
+                amounts[keyword] = amounts.get(keyword, 0) + amount
+
+    return amounts
 
 
 def to_cell_value(v):
@@ -168,7 +191,7 @@ def add_estimate_total(ws, last):
 # ---------------------------------------------------------------------------
 # 仕訳表作成 (K:P)
 # ---------------------------------------------------------------------------
-def build_bunrui_table(ws, cur, last):
+def build_bunrui_table(ws, cur, last, soukatsu_amounts):
     ws["M2"] = "見積"
     ws["N2"] = "仕切"
     ws["O2"] = "掛率"
@@ -203,9 +226,16 @@ def build_bunrui_table(ws, cur, last):
         ws.cell(row=n, column=11, value=nb)
         ws.cell(row=n, column=12, value=bunrui)
         l_addr = f"$L${n}"
-        ws.cell(row=n, column=13, value=f"=SUMIF({range2},{l_addr},{range3})")
 
-        m_value = sum_by_bunrui.get(bunrui, 0)
+        # 法定福利費・諸経費は内訳書の品目には現れず、SUMIFでは常に0になる。
+        # 総括書シートに実額があればそれをM列にそのまま転記する。
+        if bunrui in soukatsu_amounts:
+            m_value = soukatsu_amounts[bunrui]
+            ws.cell(row=n, column=13, value=m_value)
+        else:
+            ws.cell(row=n, column=13, value=f"=SUMIF({range2},{l_addr},{range3})")
+            m_value = sum_by_bunrui.get(bunrui, 0)
+
         if m_value == 0:
             ws.cell(row=n, column=15, value="")
         else:
@@ -301,6 +331,7 @@ def pick_input_file():
 
 def run(input_file):
     result = parse_quote(input_file, SHEET)
+    soukatsu_amounts = read_soukatsu_amounts(input_file)
 
     wb = Workbook()
     ws = wb.active
@@ -321,7 +352,7 @@ def run(input_file):
     try:
         cur = conn.cursor()
         classify_rows(ws, cur, last)
-        hlast = build_bunrui_table(ws, cur, last)
+        hlast = build_bunrui_table(ws, cur, last, soukatsu_amounts)
     finally:
         conn.close()
 
