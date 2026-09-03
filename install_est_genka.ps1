@@ -1,4 +1,4 @@
-# est_genka.py / dnd_filepicker.py のセットアップ用インストーラー。
+﻿# est_genka.py / dnd_filepicker.py のセットアップ用インストーラー。
 # Python確認/インストール -> 必要ライブラリのインストール -> コード取得 -> デスクトップショートカット作成
 
 $ErrorActionPreference = "Stop"
