@@ -188,8 +188,11 @@ def build_bunrui_table(ws, cur, last):
     for r in range(DATA_START_ROW, last + 1):
         cat = ws.cell(row=r, column=2).value
         amt = ws.cell(row=r, column=9).value
+        # ExcelのSUMIFは数値以外のセルを無視して合計するため、それに合わせる。
+        if not isinstance(amt, (int, float)):
+            amt = 0
         if cat:
-            sum_by_bunrui[cat] = sum_by_bunrui.get(cat, 0) + (amt or 0)
+            sum_by_bunrui[cat] = sum_by_bunrui.get(cat, 0) + amt
 
     range2 = f"$B${DATA_START_ROW}:$B${last}"
     range3 = f"$I${DATA_START_ROW}:$I${last}"
