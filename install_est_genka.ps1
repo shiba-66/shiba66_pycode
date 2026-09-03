@@ -1,4 +1,4 @@
-﻿# est_genka.py / dnd_filepicker.py のセットアップ用インストーラー。
+﻿﻿# est_genka.py / dnd_filepicker.py のセットアップ用インストーラー。
 # Python確認/インストール -> 必要ライブラリのインストール -> コード取得 -> デスクトップショートカット作成
 
 $ErrorActionPreference = "Stop"
@@ -15,11 +15,25 @@ function Write-Step($msg) {
     Write-Host "==> $msg" -ForegroundColor Cyan
 }
 
+function Get-RealPython {
+    # WindowsにはPython未インストールでもPATH上に
+    # C:\Users\<user>\AppData\Local\Microsoft\WindowsApps\python.exe という
+    # ダミーの実行エイリアスが存在することがある(Microsoft Storeへ誘導するだけの
+    # 空のスタブ)。これを実物と誤認しないよう、WindowsApps配下は候補から除外する。
+    $candidates = Get-Command python -All -ErrorAction SilentlyContinue
+    foreach ($c in $candidates) {
+        if ($c.Source -notmatch '\\WindowsApps\\') {
+            return $c
+        }
+    }
+    return $null
+}
+
 # ---------------------------------------------------------------------------
 # 1. Pythonの確認・インストール
 # ---------------------------------------------------------------------------
 Write-Step "Pythonの確認..."
-$python = Get-Command python -ErrorAction SilentlyContinue
+$python = Get-RealPython
 
 if (-not $python) {
     Write-Step "Pythonが見つからないため winget でインストールします"
@@ -35,7 +49,7 @@ if (-not $python) {
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + `
                 [System.Environment]::GetEnvironmentVariable("Path", "User")
 
-    $python = Get-Command python -ErrorAction SilentlyContinue
+    $python = Get-RealPython
     if (-not $python) {
         Write-Error "Pythonのインストールを確認できませんでした。PCを再起動してから、このインストーラーを再実行してください。"
         exit 1
@@ -47,9 +61,10 @@ if (-not $python) {
 # ---------------------------------------------------------------------------
 # 2. 必要ライブラリのインストール
 # ---------------------------------------------------------------------------
+# 以降は python/pip コマンド名の再解決に頼らず、上で確定した実体パスを直接使う。
 Write-Step "必要なライブラリをインストールします: $($Requirements -join ', ')"
-python -m pip install --upgrade pip | Out-Null
-python -m pip install @Requirements
+& $python.Source -m pip install --upgrade pip | Out-Null
+& $python.Source -m pip install @Requirements
 if ($LASTEXITCODE -ne 0) {
     Write-Error "ライブラリのインストールに失敗しました。"
     exit 1
